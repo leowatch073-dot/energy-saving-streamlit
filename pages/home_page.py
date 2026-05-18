@@ -43,20 +43,49 @@ def _inject_home_style(mobile: bool = False):
         .st-key-home_demo_control_bar {
             margin: 0 0 8px !important;
             padding: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+            overflow: visible !important;
         }
         .st-key-home_demo_control_bar [data-testid="stHorizontalBlock"] {
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
             gap: 8px !important;
             flex-wrap: nowrap !important;
-        }
-        .st-key-home_demo_control_bar [data-testid="column"] {
+            width: 100% !important;
             min-width: 0 !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+        }
+        .st-key-home_demo_control_bar [data-testid="column"],
+        .st-key-home_demo_control_bar [data-testid="stColumn"] {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: none !important;
+            flex: initial !important;
             padding: 0 !important;
         }
+        .st-key-home_demo_control_bar [data-testid="stElementContainer"] {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+        }
         .st-key-home_demo_control_bar [data-testid="stSelectbox"] {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
             margin: 0 !important;
         }
         .st-key-home_demo_control_bar [data-testid="stSelectbox"] > div {
             min-height: 36px !important;
+            width: 100% !important;
+            min-width: 0 !important;
         }
         .st-key-home_demo_control_bar [data-baseweb="select"] > div {
             min-height: 36px !important;
@@ -66,6 +95,10 @@ def _inject_home_style(mobile: bool = False):
             box-shadow: none !important;
             font-size: 12px !important;
             font-weight: 800 !important;
+        }
+        .st-key-home_demo_control_bar [data-baseweb="select"] {
+            width: 100% !important;
+            min-width: 0 !important;
         }
         .st-key-home_mobile_cards [data-testid="stVerticalBlock"] {
             width: 100% !important;
