@@ -431,9 +431,11 @@ def _render_kb(all_tip_df: pd.DataFrame, today_df: pd.DataFrame):
     if all_tip_df.empty or "ts" not in all_tip_df.columns:
         kb_df = all_tip_df.iloc[0:0].copy()
     else:
-        ts_date = pd.to_datetime(all_tip_df["ts"], errors="coerce").dt.strftime("%Y-%m-%d")
+        ts_parsed = pd.to_datetime(all_tip_df["ts"], errors="coerce")
+        ts_date = ts_parsed.dt.strftime("%Y-%m-%d")
         ts_text = all_tip_df["ts"].astype(str).str.replace("/", "-", regex=False).str[:10]
-        date_mask = ts_date.eq(today) | ts_text.eq(today)
+        ts_key = ts_date.fillna(ts_text)
+        date_mask = ts_key.le(today)
 
         dorm = _dorm_id()
         if dorm and "dorm_id" in all_tip_df.columns:
@@ -441,6 +443,17 @@ def _render_kb(all_tip_df: pd.DataFrame, today_df: pd.DataFrame):
             kb_df = all_tip_df[date_mask & dorm_mask].copy()
         else:
             kb_df = all_tip_df[date_mask].copy()
+        kb_df["_kb_date_key"] = ts_key.loc[kb_df.index]
+        kb_df["_kb_ts_sort"] = ts_parsed.loc[kb_df.index]
+        kb_df = (
+            kb_df.sort_values(
+                by=["_kb_date_key", "_kb_ts_sort", "message_index"],
+                ascending=[False, False, False],
+                kind="stable",
+            )
+            .drop(columns=["_kb_date_key", "_kb_ts_sort"], errors="ignore")
+            .reset_index(drop=True)
+        )
 
     total_n = len(kb_df)
 
@@ -454,7 +467,7 @@ def _render_kb(all_tip_df: pd.DataFrame, today_df: pd.DataFrame):
     if kb_df.empty:
         st.markdown(f"""
 <div style="padding:20px;text-align:center;color:#B0BAB5;font-size:12px;
-            font-family:'Noto Sans SC',sans-serif;">{_esc(today)} 暂无知识内容</div>
+            font-family:'Noto Sans SC',sans-serif;">截至 {_esc(today)} 暂无知识内容</div>
 """, unsafe_allow_html=True)
         return
 
