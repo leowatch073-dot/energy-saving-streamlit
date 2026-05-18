@@ -58,6 +58,59 @@ def _set_today_callback():
     st.session_state["business_date_picker"] = datetime.now().date()
 
 
+@st.cache_data(show_spinner=False)
+def _cached_default_demo_payload(
+    excel_path_str: str,
+    target_n: int,
+    noise_scale: float,
+    random_state: int,
+    tau: float,
+):
+    base_user_pool_df = load_user_pool_from_excel(
+        excel_path=Path(excel_path_str),
+        sheet_name="Sheet2",
+    )
+    sim_user_pool_df = generate_simulated_user_pool_from_base_samples(
+        base_user_pool_df=base_user_pool_df,
+        target_n=int(target_n),
+        noise_scale=float(noise_scale),
+        random_state=int(random_state),
+        id_prefix="SIM",
+    )
+    scores_from_sim_pool, _msg = batch_generate_scores_from_sim_user_pool(
+        sim_user_pool_df=sim_user_pool_df,
+        tau=float(tau),
+    )
+    return sim_user_pool_df, scores_from_sim_pool
+
+
+@st.cache_data(show_spinner=False)
+def _cached_generate_energy_sample(n_days: int, dorms: tuple[str, ...], seed: int, hour_key: str):
+    return generate_energy_sample(
+        n_days=int(n_days),
+        dorms=list(dorms),
+        seed=int(seed),
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _cached_load_energy_df(df: pd.DataFrame, align_to_hour: bool, strict_hour: bool):
+    return load_energy_df(
+        df,
+        align_to_hour=bool(align_to_hour),
+        strict_hour=bool(strict_hour),
+    )
+
+
+@st.cache_data(show_spinner=False)
+def _cached_load_energy_csv_bytes(file_bytes: bytes, align_to_hour: bool, strict_hour: bool):
+    return load_energy_csv(
+        file_bytes,
+        align_to_hour=bool(align_to_hour),
+        strict_hour=bool(strict_hour),
+    )
+
+
 # ===================== 频控 =====================
 def freq_guard_allow_daily(dorm_id: str, daily_cap: int, inter_logs: pd.DataFrame) -> tuple[bool, int]:
     """判断某宿舍当天是否还能继续发送干预。"""
@@ -165,19 +218,11 @@ def ensure_default_demo_session():
         return
 
     try:
-        base_user_pool_df = load_user_pool_from_excel(
-            excel_path=Path(DATA_DIR) / "user_pool.xlsx",
-            sheet_name="Sheet2",
-        )
-        sim_user_pool_df = generate_simulated_user_pool_from_base_samples(
-            base_user_pool_df=base_user_pool_df,
+        sim_user_pool_df, scores_from_sim_pool = _cached_default_demo_payload(
+            excel_path_str=str(Path(DATA_DIR) / "user_pool.xlsx"),
             target_n=int(st.session_state.get("sim_target_n", 48)),
             noise_scale=float(st.session_state.get("sim_noise_scale", 0.03)),
             random_state=int(st.session_state.get("sim_pool_seed", 42)),
-            id_prefix="SIM",
-        )
-        scores_from_sim_pool, _msg = batch_generate_scores_from_sim_user_pool(
-            sim_user_pool_df=sim_user_pool_df,
             tau=float(st.session_state.get("tau_batch_scores", 0.30)),
         )
         st.session_state["sim_user_pool_df"] = sim_user_pool_df
@@ -255,6 +300,22 @@ def prepare_global_data(df_all: pd.DataFrame, ridge_alpha: float = 1.0):
 
     outcome_logs_df = pd.concat(outcome_frames, ignore_index=True) if outcome_frames else pd.DataFrame()
     return models_by_dorm, outcome_logs_df, weekly_metrics_by_dorm
+
+
+@st.cache_data(show_spinner=False)
+def _cached_prepare_global_data(df_all: pd.DataFrame, ridge_alpha: float = 1.0):
+    return prepare_global_data(df_all, ridge_alpha=float(ridge_alpha))
+
+
+@st.cache_data(show_spinner=False)
+def _cached_dorm_outcome_map(outcome_logs_df: pd.DataFrame):
+    if (
+        outcome_logs_df is None
+        or outcome_logs_df.empty
+        or "dorm_id" not in outcome_logs_df.columns
+    ):
+        return {}
+    return {dorm_id: sub.copy() for dorm_id, sub in outcome_logs_df.groupby("dorm_id")}
 
 
 # ===================== Sidebar 样式与展示 =====================
@@ -624,8 +685,8 @@ with st.sidebar:
         if data_mode == "上传CSV":
             uploaded = st.file_uploader("上传能耗CSV", type=["csv"])
             if uploaded is not None:
-                df_all, load_stats = load_energy_csv(
-                    uploaded,
+                df_all, load_stats = _cached_load_energy_csv_bytes(
+                    uploaded.getvalue(),
                     align_to_hour=align_to_hour,
                     strict_hour=strict_hour,
                 )
@@ -645,12 +706,13 @@ with st.sidebar:
             else:
                 sim_dorm_ids = list(DORM_CS_PROFILE.keys())
 
-            df_sim = generate_energy_sample(
+            df_sim = _cached_generate_energy_sample(
                 n_days=int(sim_days),
-                dorms=sim_dorm_ids,
+                dorms=tuple(sim_dorm_ids),
                 seed=int(seed),
+                hour_key=pd.Timestamp.today().floor("h").strftime("%Y-%m-%d %H:00:00"),
             )
-            df_all, load_stats = load_energy_df(
+            df_all, load_stats = _cached_load_energy_df(
                 df_sim,
                 align_to_hour=align_to_hour,
                 strict_hour=strict_hour,
@@ -718,17 +780,11 @@ with st.sidebar:
 
 
 # ===================== 公共数据准备 =====================
-models_by_dorm, outcome_logs_df, weekly_metrics_by_dorm = prepare_global_data(
+models_by_dorm, outcome_logs_df, weekly_metrics_by_dorm = _cached_prepare_global_data(
     df_all, ridge_alpha=float(ridge_alpha)
 )
 st.session_state["weekly_metrics_by_dorm"] = weekly_metrics_by_dorm
-st.session_state["dorm_outcome_map"] = (
-    {dorm_id: sub.copy() for dorm_id, sub in outcome_logs_df.groupby("dorm_id")}
-    if outcome_logs_df is not None
-    and not outcome_logs_df.empty
-    and "dorm_id" in outcome_logs_df.columns
-    else {}
-)
+st.session_state["dorm_outcome_map"] = _cached_dorm_outcome_map(outcome_logs_df)
 
 
 
