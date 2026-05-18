@@ -3095,14 +3095,7 @@ def render_home_page(
             for idx, date_str in enumerate(demo_date_options)
         }
         if "selected_demo_day_index" not in st.session_state:
-            if current_date_str in demo_date_options:
-                st.session_state["selected_demo_day_index"] = demo_date_options.index(current_date_str)
-            elif st.session_state.get("mobile_demo_day_select") in demo_date_options:
-                st.session_state["selected_demo_day_index"] = demo_date_options.index(
-                    st.session_state.get("mobile_demo_day_select")
-                )
-            else:
-                st.session_state["selected_demo_day_index"] = len(demo_date_options) - 1
+            st.session_state["selected_demo_day_index"] = 0
 
         try:
             selected_day_idx = int(st.session_state.get("selected_demo_day_index", 0))
