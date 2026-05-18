@@ -40,6 +40,33 @@ def _inject_home_style(mobile: bool = False):
             box-sizing: border-box !important;
             overflow: hidden !important;
         }
+        .st-key-home_demo_control_bar {
+            margin: 0 0 8px !important;
+            padding: 0 !important;
+        }
+        .st-key-home_demo_control_bar [data-testid="stHorizontalBlock"] {
+            gap: 8px !important;
+            flex-wrap: nowrap !important;
+        }
+        .st-key-home_demo_control_bar [data-testid="column"] {
+            min-width: 0 !important;
+            padding: 0 !important;
+        }
+        .st-key-home_demo_control_bar [data-testid="stSelectbox"] {
+            margin: 0 !important;
+        }
+        .st-key-home_demo_control_bar [data-testid="stSelectbox"] > div {
+            min-height: 36px !important;
+        }
+        .st-key-home_demo_control_bar [data-baseweb="select"] > div {
+            min-height: 36px !important;
+            border-radius: 13px !important;
+            border-color: #DCE8DF !important;
+            background: rgba(255,255,255,0.78) !important;
+            box-shadow: none !important;
+            font-size: 12px !important;
+            font-weight: 800 !important;
+        }
         .st-key-home_mobile_cards [data-testid="stVerticalBlock"] {
             width: 100% !important;
             max-width: 100% !important;
@@ -842,6 +869,40 @@ def _get_sim_dorm_ids_from_scores() -> list[str]:
     sim_ids = [str(r.get("dorm_id", "")).strip() for r in scores
                if str(r.get("dorm_id", "")).startswith("SIM_")]
     return sorted(set(sim_ids))
+
+def _collect_demo_date_options(hourly_df=None, outcome_logs_df=None) -> list[str]:
+    date_values: list[str] = []
+    for df in (outcome_logs_df, hourly_df):
+        if df is None or getattr(df, "empty", True):
+            continue
+        for col in ("timestamp_hour", "timestamp"):
+            if col not in df.columns:
+                continue
+            dates = (
+                pd.to_datetime(df[col], errors="coerce")
+                .dropna()
+                .dt.strftime("%Y-%m-%d")
+                .tolist()
+            )
+            date_values.extend(dates)
+            if dates:
+                break
+
+    if not date_values:
+        current = str(st.session_state.get("business_date_str", pd.Timestamp.now().strftime("%Y-%m-%d")))[:10]
+        return [current]
+
+    return sorted(set(date_values))
+
+def _sync_mobile_demo_day_selection():
+    date_str = str(st.session_state.get("mobile_demo_day_select", "")).strip()[:10]
+    try:
+        date_val = pd.to_datetime(date_str).date()
+    except Exception:
+        return
+    st.session_state["business_date_picker"] = date_val
+    st.session_state["business_date"] = date_val
+    st.session_state["business_date_str"] = pd.to_datetime(date_val).strftime("%Y-%m-%d")
 
 def _message_exists_by_key(messages, message_key: str) -> bool:
     if not messages or not message_key:
@@ -2909,11 +2970,8 @@ def render_home_page(
     if not real_dorm_ids and not sim_dorm_ids:
         st.warning("未找到可用的宿舍 ID。")
         return
-    
-    selected_date_str = str(
-        st.session_state.get("business_date_str", pd.Timestamp.now().strftime("%Y-%m-%d"))
-    )
-    ts_now = f"{selected_date_str} 09:00:00"
+
+    demo_date_options = _collect_demo_date_options(hourly_df, outcome_logs_df)
 
     # ── ① 宿舍选择 ──────────────────────────────────
     source_real = "真实宿舍"
@@ -2950,15 +3008,47 @@ def render_home_page(
                                        if current_dorm_for_messages in selectable_dorm_ids
                                        else selectable_dorm_ids[0])
     if mobile:
-        selected_dorm = st.selectbox(
-            "选择宿舍",
-            selectable_dorm_ids,
-            key=dorm_key,
-            label_visibility="collapsed",
-        )
+        current_date_str = str(
+            st.session_state.get("business_date_str", pd.Timestamp.now().strftime("%Y-%m-%d"))
+        )[:10]
+        if (
+            "mobile_demo_day_select" not in st.session_state
+            or st.session_state.get("mobile_demo_day_select") not in demo_date_options
+        ):
+            st.session_state["mobile_demo_day_select"] = (
+                current_date_str if current_date_str in demo_date_options else demo_date_options[-1]
+            )
+
+        day_label_by_date = {
+            date_str: f"第 {idx + 1} 天"
+            for idx, date_str in enumerate(demo_date_options)
+        }
+        with st.container(key="home_demo_control_bar"):
+            day_col, dorm_col = st.columns(2, gap="small")
+            with day_col:
+                selected_date_str = st.selectbox(
+                    "演示日期",
+                    demo_date_options,
+                    key="mobile_demo_day_select",
+                    format_func=lambda d: day_label_by_date.get(str(d), str(d)),
+                    label_visibility="collapsed",
+                    on_change=_sync_mobile_demo_day_selection,
+                )
+            with dorm_col:
+                selected_dorm = st.selectbox(
+                    "选择宿舍",
+                    selectable_dorm_ids,
+                    key=dorm_key,
+                    label_visibility="collapsed",
+                )
+        st.session_state["business_date"] = pd.to_datetime(selected_date_str).date()
+        st.session_state["business_date_str"] = str(selected_date_str)
         st.session_state["current_dorm_for_messages"] = selected_dorm
         tau = float(st.session_state.get(f"tau_{selected_dorm}", 0.30))
     else:
+        selected_date_str = str(
+            st.session_state.get("business_date_str", pd.Timestamp.now().strftime("%Y-%m-%d"))
+        )
         with sel_c2:
             selected_dorm = st.selectbox("选择宿舍", selectable_dorm_ids, key=dorm_key)
             st.session_state["current_dorm_for_messages"] = selected_dorm
@@ -2968,6 +3058,7 @@ def render_home_page(
                 if load_stats is not None:
                     st.write(load_stats)
 
+    ts_now = f"{selected_date_str} 09:00:00"
     is_sim_mode = (dorm_source == source_sim)
 
     # ── 数据准备（不变） ─────────────────────────────────────────
@@ -3004,7 +3095,7 @@ def render_home_page(
         wm_all = st.session_state.get("weekly_metrics_by_dorm", {})
         wm = wm_all.get(str(selected_dorm), None)
 
-        if wm is not None:
+        if wm is not None and not mobile:
             actual = float(pd.to_numeric(wm.get("actual_sum", np.nan), errors="coerce"))
             baseline = float(pd.to_numeric(wm.get("baseline_sum", np.nan), errors="coerce"))
             savings = float(pd.to_numeric(wm.get("reward_sum", np.nan), errors="coerce"))

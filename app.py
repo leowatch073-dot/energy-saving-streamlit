@@ -588,6 +588,11 @@ def _sidebar_soft_divider():
 # ===================== 启动初始化 =====================
 init_session_state()
 ensure_default_demo_session()
+if "mobile_demo_day_select" in st.session_state:
+    mobile_demo_date = _normalize_business_date(st.session_state.get("mobile_demo_day_select"))
+    st.session_state["business_date_picker"] = mobile_demo_date
+    st.session_state["business_date"] = mobile_demo_date
+    st.session_state["business_date_str"] = pd.to_datetime(mobile_demo_date).strftime("%Y-%m-%d")
 inject_sidebar_style()
 
 
@@ -743,7 +748,7 @@ def _inject_mobile_shell_style():
             --mobile-stage-reserve: 84px;
             --mobile-shell-h: min(844px, calc(100dvh - var(--mobile-stage-reserve)));
             --mobile-edge-inset: 28px;
-            --mobile-status-h: 30px;
+            --mobile-status-h: 0px;
             --mobile-tab-h: 44px;
             --mobile-tab-shell-h: 64px;
             --mobile-safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -844,33 +849,6 @@ def _inject_mobile_shell_style():
             font-weight: 800 !important;
             padding: 8px 10px !important;
             white-space: normal !important;
-        }
-
-        .st-key-mobile_status_shell,
-        .mobile-status-wrap {
-            position: absolute !important;
-            top: 0 !important;
-            left: var(--mobile-edge-inset) !important;
-            right: var(--mobile-edge-inset) !important;
-            height: var(--mobile-status-h) !important;
-            z-index: 20 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            line-height: 0 !important;
-            overflow: hidden !important;
-        }
-        .st-key-mobile_status_shell [data-testid="stElementContainer"],
-        .st-key-mobile_status_shell [data-testid="stIFrame"],
-        .mobile-status-wrap [data-testid="stElementContainer"],
-        .mobile-status-wrap [data-testid="stIFrame"] {
-            margin: 0 !important;
-            padding: 0 !important;
-            line-height: 0 !important;
-        }
-        .st-key-mobile_status_shell iframe,
-        .mobile-status-wrap iframe {
-            display: block !important;
-            border-radius: 0 !important;
         }
 
         .st-key-mobile_tabbar_shell,
@@ -1024,12 +1002,6 @@ def _inject_mobile_shell_style():
                 height: 100dvh !important;
                 max-height: 100dvh !important;
                 margin: 0 !important;
-            }
-            .st-key-mobile_status_shell,
-            .mobile-status-wrap {
-                top: env(safe-area-inset-top, 0px) !important;
-                left: var(--mobile-edge-inset) !important;
-                right: var(--mobile-edge-inset) !important;
             }
             .st-key-mobile_page_scroll {
                 top: calc(env(safe-area-inset-top, 0px) + var(--mobile-status-h) + 8px) !important;
@@ -1220,12 +1192,6 @@ def _inject_mobile_final_overrides():
                 max-height: 100dvh !important;
                 margin: 0 !important;
             }
-            .st-key-mobile_status_shell,
-            .mobile-status-wrap {
-                top: env(safe-area-inset-top, 0px) !important;
-                left: var(--mobile-edge-inset) !important;
-                right: var(--mobile-edge-inset) !important;
-            }
             .st-key-mobile_page_scroll {
                 top: calc(env(safe-area-inset-top, 0px) + var(--mobile-status-h) + 8px) !important;
                 bottom: calc(var(--mobile-tab-shell-h) + 16px + var(--mobile-safe-bottom)) !important;
@@ -1379,41 +1345,9 @@ else:
         st.rerun()
 
     else:
-        import streamlit.components.v1 as _comp
         mobile_tab   = st.session_state.get("mobile_tab", "Home")
-        from datetime import datetime as _dt
-        now_time     = _dt.now().strftime("%H:%M")
         unread_count = len([m for m in st.session_state.get("messages", [])
                             if isinstance(m, dict) and not m.get("read", False)])
-
-        # 顶部状态栏。它现在只是手机容器里的普通内容，不再依赖固定壳高。
-        with st.container(key="mobile_status_shell"):
-            _comp.html(f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-<style>
-*{{box-sizing:border-box;margin:0;padding:0;}}
-html,body{{width:100%;height:30px;overflow:hidden;background:#F1F5F2;
-  font-family:'Noto Sans SC',-apple-system,sans-serif;}}
-.bar{{height:30px;display:flex;justify-content:space-between;align-items:center;
-  padding:1px 4px 0;font-size:14px;font-weight:800;color:#1A2820;}}
-</style></head><body>
-<div class="bar">
-  <span>{now_time}</span>
-  <div style="display:flex;gap:6px;align-items:center;">
-    <svg width="17" height="12" viewBox="0 0 17 12" fill="#1A2820">
-      <rect x="0" y="6" width="3" height="6" rx="0.8"/>
-      <rect x="4.5" y="4" width="3" height="8" rx="0.8"/>
-      <rect x="9" y="2" width="3" height="10" rx="0.8"/>
-      <rect x="13.5" y="0" width="3" height="12" rx="0.8" opacity="0.3"/>
-    </svg>
-    <svg width="25" height="12" viewBox="0 0 25 12" fill="#1A2820">
-      <rect x="0.5" y="0.5" width="21" height="11" rx="3"
-            stroke="#1A2820" stroke-width="1" fill="none"/>
-      <rect x="22" y="4" width="3" height="4" rx="1.5"/>
-      <rect x="2" y="2" width="15" height="8" rx="2"/>
-    </svg>
-  </div>
-</div>
-</body></html>""", height=30, scrolling=False)
 
         # 内容路由。页面内容在固定手机屏幕内部滚动，底部 Tab 留在屏幕内。
         with st.container(key="mobile_page_scroll"):
