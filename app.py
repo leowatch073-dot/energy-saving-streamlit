@@ -190,7 +190,11 @@ def init_session_state():
     if "business_date_picker" not in st.session_state:
         st.session_state["business_date_picker"] = datetime.now().date()
 
-    business_date = _normalize_business_date(st.session_state.get("business_date_picker"))
+    if "selected_business_date" not in st.session_state:
+        st.session_state["selected_business_date"] = _normalize_business_date(
+            st.session_state.get("business_date_picker")
+        )
+    business_date = _normalize_business_date(st.session_state.get("selected_business_date"))
     st.session_state["selected_business_date"] = business_date
     st.session_state["business_date_str"] = pd.to_datetime(business_date).strftime("%Y-%m-%d")
     init_user_progress_state()
@@ -756,9 +760,10 @@ with st.sidebar:
                 args=(int(step_days),),
             )
 
-        business_date = _normalize_business_date(st.session_state.get("business_date_picker"))
-        st.session_state["selected_business_date"] = business_date
-        st.session_state["business_date_str"] = pd.to_datetime(business_date).strftime("%Y-%m-%d")
+        if page == "Admin" or "selected_demo_day_index" not in st.session_state:
+            business_date = _normalize_business_date(st.session_state.get("business_date_picker"))
+            st.session_state["selected_business_date"] = business_date
+            st.session_state["business_date_str"] = pd.to_datetime(business_date).strftime("%Y-%m-%d")
         st.caption(f"当前演示日期：{st.session_state['business_date_str']}")
 
     with st.expander("Manage｜历史管理", expanded=False):
