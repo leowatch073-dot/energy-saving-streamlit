@@ -976,7 +976,16 @@ def _inject_mobile_shell_style():
                 --mobile-stage-bottom: 0px;
                 --mobile-stage-reserve: 0px;
                 --mobile-edge-inset: 14px;
-                --mobile-tab-shell-h: 72px;
+                --mobile-tab-shell-h: 84px;
+            }
+            footer,
+            [data-testid="stToolbar"],
+            [data-testid="stStatusWidget"],
+            [data-testid="stDecoration"],
+            [data-testid="stDeployButton"] {
+                display: none !important;
+                visibility: hidden !important;
+                pointer-events: none !important;
             }
             html, body, .stApp,
             [data-testid="stAppViewContainer"],
@@ -1024,19 +1033,45 @@ def _inject_mobile_shell_style():
             }
             .st-key-mobile_page_scroll {
                 top: calc(env(safe-area-inset-top, 0px) + var(--mobile-status-h) + 8px) !important;
-                bottom: calc(var(--mobile-tab-shell-h) + 10px + var(--mobile-safe-bottom)) !important;
+                bottom: calc(var(--mobile-tab-shell-h) + 16px + var(--mobile-safe-bottom)) !important;
                 left: var(--mobile-edge-inset) !important;
                 right: var(--mobile-edge-inset) !important;
-                padding-bottom: 18px !important;
+                padding-bottom: 24px !important;
                 overflow-x: hidden !important;
             }
             .st-key-mobile_tabbar_shell,
             .mobile-tabbar {
                 left: 12px !important;
                 right: 12px !important;
-                bottom: calc(6px + var(--mobile-safe-bottom)) !important;
+                bottom: calc(14px + var(--mobile-safe-bottom)) !important;
                 border-radius: 24px !important;
                 box-shadow: 0 8px 24px rgba(16,24,18,0.16) !important;
+                z-index: 1000 !important;
+            }
+            .st-key-mobile_tabbar_shell [data-testid="stHorizontalBlock"],
+            .mobile-tabbar [data-testid="stHorizontalBlock"] {
+                display: grid !important;
+                grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+                grid-auto-flow: column !important;
+                gap: 2px !important;
+                width: 100% !important;
+                min-width: 0 !important;
+                overflow: visible !important;
+            }
+            .st-key-mobile_tabbar_shell [data-testid="column"],
+            .st-key-mobile_tabbar_shell [data-testid="stColumn"],
+            .mobile-tabbar [data-testid="column"],
+            .mobile-tabbar [data-testid="stColumn"] {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                flex: initial !important;
+                padding: 0 !important;
+            }
+            .st-key-mobile_tabbar_shell [data-testid="stButton"] > button,
+            .mobile-tabbar [data-testid="stButton"] > button {
+                width: 100% !important;
+                min-width: 0 !important;
             }
         }
         </style>
@@ -1136,7 +1171,16 @@ def _inject_mobile_final_overrides():
                 --mobile-stage-bottom: 0px;
                 --mobile-stage-reserve: 0px;
                 --mobile-edge-inset: 14px;
-                --mobile-tab-shell-h: 72px;
+                --mobile-tab-shell-h: 84px;
+            }
+            footer,
+            [data-testid="stToolbar"],
+            [data-testid="stStatusWidget"],
+            [data-testid="stDecoration"],
+            [data-testid="stDeployButton"] {
+                display: none !important;
+                visibility: hidden !important;
+                pointer-events: none !important;
             }
             html, body, .stApp,
             [data-testid="stAppViewContainer"],
@@ -1184,19 +1228,45 @@ def _inject_mobile_final_overrides():
             }
             .st-key-mobile_page_scroll {
                 top: calc(env(safe-area-inset-top, 0px) + var(--mobile-status-h) + 8px) !important;
-                bottom: calc(var(--mobile-tab-shell-h) + 10px + var(--mobile-safe-bottom)) !important;
+                bottom: calc(var(--mobile-tab-shell-h) + 16px + var(--mobile-safe-bottom)) !important;
                 left: var(--mobile-edge-inset) !important;
                 right: var(--mobile-edge-inset) !important;
-                padding-bottom: 18px !important;
+                padding-bottom: 24px !important;
                 overflow-x: hidden !important;
             }
             .st-key-mobile_tabbar_shell,
             .mobile-tabbar {
                 left: 12px !important;
                 right: 12px !important;
-                bottom: calc(6px + var(--mobile-safe-bottom)) !important;
+                bottom: calc(14px + var(--mobile-safe-bottom)) !important;
                 border-radius: 24px !important;
                 box-shadow: 0 8px 24px rgba(16,24,18,0.16) !important;
+                z-index: 1000 !important;
+            }
+            .st-key-mobile_tabbar_shell [data-testid="stHorizontalBlock"],
+            .mobile-tabbar [data-testid="stHorizontalBlock"] {
+                display: grid !important;
+                grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+                grid-auto-flow: column !important;
+                gap: 2px !important;
+                width: 100% !important;
+                min-width: 0 !important;
+                overflow: visible !important;
+            }
+            .st-key-mobile_tabbar_shell [data-testid="column"],
+            .st-key-mobile_tabbar_shell [data-testid="stColumn"],
+            .mobile-tabbar [data-testid="column"],
+            .mobile-tabbar [data-testid="stColumn"] {
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: none !important;
+                flex: initial !important;
+                padding: 0 !important;
+            }
+            .st-key-mobile_tabbar_shell [data-testid="stButton"] > button,
+            .mobile-tabbar [data-testid="stButton"] > button {
+                width: 100% !important;
+                min-width: 0 !important;
             }
         }
         </style>
