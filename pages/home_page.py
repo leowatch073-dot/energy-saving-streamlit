@@ -50,8 +50,8 @@ def _inject_home_style(mobile: bool = False):
         }
         .st-key-home_demo_control_bar [data-testid="stHorizontalBlock"] {
             display: grid !important;
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-            gap: 8px !important;
+            grid-template-columns: 34px minmax(0, 1fr) 34px minmax(0, 2fr) !important;
+            gap: 6px !important;
             flex-wrap: nowrap !important;
             width: 100% !important;
             min-width: 0 !important;
@@ -75,6 +75,49 @@ def _inject_home_style(mobile: bool = False):
             margin: 0 !important;
             padding: 0 !important;
             overflow: visible !important;
+        }
+        .st-key-home_demo_control_bar [data-testid="stButton"] {
+            width: 100% !important;
+            min-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .st-key-home_demo_control_bar [data-testid="stButton"] > button {
+            width: 100% !important;
+            min-width: 0 !important;
+            height: 36px !important;
+            min-height: 36px !important;
+            padding: 0 !important;
+            border-radius: 13px !important;
+            border: 1px solid #DCE8DF !important;
+            background: rgba(255,255,255,0.78) !important;
+            color: #203027 !important;
+            box-shadow: none !important;
+            font-size: 18px !important;
+            font-weight: 900 !important;
+            line-height: 1 !important;
+        }
+        .st-key-home_demo_control_bar [data-testid="stButton"] > button:disabled {
+            opacity: 0.38 !important;
+            color: #9AA8A0 !important;
+        }
+        .home-demo-day-label {
+            height: 36px;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 13px;
+            border: 1px solid #DCE8DF;
+            background: rgba(255,255,255,0.78);
+            color: #203027;
+            font-size: 13px;
+            font-weight: 900;
+            line-height: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            box-sizing: border-box;
         }
         .st-key-home_demo_control_bar [data-testid="stSelectbox"] {
             width: 100% !important;
@@ -927,14 +970,17 @@ def _collect_demo_date_options(hourly_df=None, outcome_logs_df=None) -> list[str
 
     return sorted(set(date_values))
 
-def _sync_mobile_demo_day_selection():
-    date_str = str(st.session_state.get("mobile_demo_day_select", "")).strip()[:10]
+def _set_mobile_demo_day_index(day_index: int, demo_date_options: list[str]) -> None:
+    if not demo_date_options:
+        return
+    idx = max(0, min(int(day_index), len(demo_date_options) - 1))
+    date_str = str(demo_date_options[idx])[:10]
     try:
         date_val = pd.to_datetime(date_str).date()
     except Exception:
         return
-    st.session_state["business_date_picker"] = date_val
-    st.session_state["business_date"] = date_val
+    st.session_state["selected_demo_day_index"] = idx
+    st.session_state["selected_business_date"] = date_val
     st.session_state["business_date_str"] = pd.to_datetime(date_val).strftime("%Y-%m-%d")
 
 def _message_exists_by_key(messages, message_key: str) -> bool:
@@ -3044,28 +3090,56 @@ def render_home_page(
         current_date_str = str(
             st.session_state.get("business_date_str", pd.Timestamp.now().strftime("%Y-%m-%d"))
         )[:10]
-        if (
-            "mobile_demo_day_select" not in st.session_state
-            or st.session_state.get("mobile_demo_day_select") not in demo_date_options
-        ):
-            st.session_state["mobile_demo_day_select"] = (
-                current_date_str if current_date_str in demo_date_options else demo_date_options[-1]
-            )
-
         day_label_by_date = {
             date_str: f"第 {idx + 1} 天"
             for idx, date_str in enumerate(demo_date_options)
         }
+        if "selected_demo_day_index" not in st.session_state:
+            if current_date_str in demo_date_options:
+                st.session_state["selected_demo_day_index"] = demo_date_options.index(current_date_str)
+            elif st.session_state.get("mobile_demo_day_select") in demo_date_options:
+                st.session_state["selected_demo_day_index"] = demo_date_options.index(
+                    st.session_state.get("mobile_demo_day_select")
+                )
+            else:
+                st.session_state["selected_demo_day_index"] = len(demo_date_options) - 1
+
+        try:
+            selected_day_idx = int(st.session_state.get("selected_demo_day_index", 0))
+        except Exception:
+            selected_day_idx = 0
+        selected_day_idx = max(0, min(selected_day_idx, len(demo_date_options) - 1))
+        if st.session_state.get("selected_demo_day_index") != selected_day_idx:
+            st.session_state["selected_demo_day_index"] = selected_day_idx
+        selected_date_str = str(demo_date_options[selected_day_idx])
+
         with st.container(key="home_demo_control_bar"):
-            day_col, dorm_col = st.columns(2, gap="small")
-            with day_col:
-                selected_date_str = st.selectbox(
-                    "演示日期",
-                    demo_date_options,
-                    key="mobile_demo_day_select",
-                    format_func=lambda d: day_label_by_date.get(str(d), str(d)),
-                    label_visibility="collapsed",
-                    on_change=_sync_mobile_demo_day_selection,
+            prev_col, label_col, next_col, dorm_col = st.columns(
+                [0.34, 1.32, 0.34, 2.0],
+                gap="small",
+            )
+            with prev_col:
+                st.button(
+                    "‹",
+                    key="mobile_demo_day_prev",
+                    disabled=selected_day_idx <= 0,
+                    use_container_width=True,
+                    on_click=_set_mobile_demo_day_index,
+                    args=(selected_day_idx - 1, demo_date_options),
+                )
+            with label_col:
+                st.markdown(
+                    f'<div class="home-demo-day-label">{day_label_by_date.get(selected_date_str, selected_date_str)}</div>',
+                    unsafe_allow_html=True,
+                )
+            with next_col:
+                st.button(
+                    "›",
+                    key="mobile_demo_day_next",
+                    disabled=selected_day_idx >= len(demo_date_options) - 1,
+                    use_container_width=True,
+                    on_click=_set_mobile_demo_day_index,
+                    args=(selected_day_idx + 1, demo_date_options),
                 )
             with dorm_col:
                 selected_dorm = st.selectbox(
@@ -3074,7 +3148,7 @@ def render_home_page(
                     key=dorm_key,
                     label_visibility="collapsed",
                 )
-        st.session_state["business_date"] = pd.to_datetime(selected_date_str).date()
+        st.session_state["selected_business_date"] = pd.to_datetime(selected_date_str).date()
         st.session_state["business_date_str"] = str(selected_date_str)
         st.session_state["current_dorm_for_messages"] = selected_dorm
         tau = float(st.session_state.get(f"tau_{selected_dorm}", 0.30))

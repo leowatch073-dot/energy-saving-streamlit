@@ -138,7 +138,7 @@ def init_session_state():
         st.session_state["business_date_picker"] = datetime.now().date()
 
     business_date = _normalize_business_date(st.session_state.get("business_date_picker"))
-    st.session_state["business_date"] = business_date
+    st.session_state["selected_business_date"] = business_date
     st.session_state["business_date_str"] = pd.to_datetime(business_date).strftime("%Y-%m-%d")
     init_user_progress_state()
 
@@ -588,11 +588,14 @@ def _sidebar_soft_divider():
 # ===================== 启动初始化 =====================
 init_session_state()
 ensure_default_demo_session()
-if "mobile_demo_day_select" in st.session_state:
-    mobile_demo_date = _normalize_business_date(st.session_state.get("mobile_demo_day_select"))
-    st.session_state["business_date_picker"] = mobile_demo_date
-    st.session_state["business_date"] = mobile_demo_date
-    st.session_state["business_date_str"] = pd.to_datetime(mobile_demo_date).strftime("%Y-%m-%d")
+if "selected_business_date" in st.session_state:
+    selected_date = _normalize_business_date(st.session_state.get("selected_business_date"))
+    st.session_state["selected_business_date"] = selected_date
+    st.session_state["business_date_str"] = pd.to_datetime(selected_date).strftime("%Y-%m-%d")
+elif "mobile_demo_day_select" in st.session_state:
+    selected_date = _normalize_business_date(st.session_state.get("mobile_demo_day_select"))
+    st.session_state["selected_business_date"] = selected_date
+    st.session_state["business_date_str"] = pd.to_datetime(selected_date).strftime("%Y-%m-%d")
 inject_sidebar_style()
 
 
@@ -692,7 +695,7 @@ with st.sidebar:
             )
 
         business_date = _normalize_business_date(st.session_state.get("business_date_picker"))
-        st.session_state["business_date"] = business_date
+        st.session_state["selected_business_date"] = business_date
         st.session_state["business_date_str"] = pd.to_datetime(business_date).strftime("%Y-%m-%d")
         st.caption(f"当前演示日期：{st.session_state['business_date_str']}")
 
