@@ -4,12 +4,13 @@ from __future__ import annotations
 import html
 import textwrap
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from config import DORM_CS_PROFILE
+from config import DATA_DIR, DORM_CS_PROFILE
 from models.baseline import train_ridge_baseline, predict_baseline
 from models.bandit import linucb_init
 from pages.admin_page import render_admin_page
@@ -17,6 +18,11 @@ from pages.home_page import render_home_page
 from pages.messages_page import render_mobile_messages_page
 from pages.profile_page import render_profile_page
 from pages.tasks_page import render_tasks_page
+from services.replay_service import (
+    batch_generate_scores_from_sim_user_pool,
+    generate_simulated_user_pool_from_base_samples,
+    load_user_pool_from_excel,
+)
 from state.user_progress import init_user_progress_state
 from utils.data_utils import (
     fill_hours,
@@ -135,6 +141,50 @@ def init_session_state():
     st.session_state["business_date"] = business_date
     st.session_state["business_date_str"] = pd.to_datetime(business_date).strftime("%Y-%m-%d")
     init_user_progress_state()
+
+
+def ensure_default_demo_session():
+    """Prepare an in-memory demo pool for mobile cold starts."""
+    st.session_state.setdefault("sim_target_n", 48)
+    st.session_state.setdefault("sim_noise_scale", 0.03)
+    st.session_state.setdefault("sim_pool_seed", 42)
+    st.session_state.setdefault("tau_batch_scores", 0.30)
+
+    sim_user_pool_df = st.session_state.get("sim_user_pool_df")
+    scores = st.session_state.get("scores", [])
+    has_pool = (
+        sim_user_pool_df is not None
+        and hasattr(sim_user_pool_df, "empty")
+        and not sim_user_pool_df.empty
+    )
+    has_scores = isinstance(scores, list) and len(scores) > 0
+    if has_pool and has_scores:
+        st.session_state["_default_demo_session_ready"] = True
+        return
+    if st.session_state.get("_default_demo_session_ready", False):
+        return
+
+    try:
+        base_user_pool_df = load_user_pool_from_excel(
+            excel_path=Path(DATA_DIR) / "user_pool.xlsx",
+            sheet_name="Sheet2",
+        )
+        sim_user_pool_df = generate_simulated_user_pool_from_base_samples(
+            base_user_pool_df=base_user_pool_df,
+            target_n=int(st.session_state.get("sim_target_n", 48)),
+            noise_scale=float(st.session_state.get("sim_noise_scale", 0.03)),
+            random_state=int(st.session_state.get("sim_pool_seed", 42)),
+            id_prefix="SIM",
+        )
+        scores_from_sim_pool, _msg = batch_generate_scores_from_sim_user_pool(
+            sim_user_pool_df=sim_user_pool_df,
+            tau=float(st.session_state.get("tau_batch_scores", 0.30)),
+        )
+        st.session_state["sim_user_pool_df"] = sim_user_pool_df
+        st.session_state["scores"] = scores_from_sim_pool
+        st.session_state["_default_demo_session_ready"] = True
+    except Exception as exc:
+        st.session_state["_default_demo_session_error"] = str(exc)
 
 
 # ===================== baseline / outcome =====================
@@ -537,6 +587,7 @@ def _sidebar_soft_divider():
 
 # ===================== 启动初始化 =====================
 init_session_state()
+ensure_default_demo_session()
 inject_sidebar_style()
 
 
@@ -556,7 +607,7 @@ with st.sidebar:
         data_mode = st.radio(
             "选择数据来源",
             ["上传CSV", "使用模拟数据（>=2周）"],
-            index=0,
+            index=1,
             label_visibility="collapsed",
         )
         align_to_hour = st.toggle("导入时归整到整点（推荐开）", value=True)
@@ -917,31 +968,75 @@ def _inject_mobile_shell_style():
         }
 
         @media (max-width: 520px) {
+            :root {
+                --mobile-shell-max: 100vw;
+                --mobile-shell-h: 100dvh;
+                --mobile-radius: 0px;
+                --mobile-stage-top: 0px;
+                --mobile-stage-bottom: 0px;
+                --mobile-stage-reserve: 0px;
+                --mobile-edge-inset: 14px;
+                --mobile-tab-shell-h: 72px;
+            }
+            html, body, .stApp,
+            [data-testid="stAppViewContainer"],
+            .stAppViewContainer,
+            [data-testid="stMain"],
+            .stMain {
+                width: 100vw !important;
+                max-width: 100vw !important;
+                min-height: 100dvh !important;
+                overflow-x: hidden !important;
+                background: var(--mobile-shell-bg) !important;
+            }
             .block-container {
                 box-sizing: border-box !important;
-                width: min(calc(100% - 32px), var(--mobile-shell-max)) !important;
-                max-width: var(--mobile-shell-max) !important;
-                height: var(--mobile-shell-h) !important;
+                width: 100vw !important;
+                max-width: 100vw !important;
+                height: 100dvh !important;
                 min-height: 0 !important;
-                max-height: var(--mobile-shell-h) !important;
-                margin: var(--mobile-stage-top) auto var(--mobile-stage-bottom) !important;
+                max-height: 100dvh !important;
+                margin: 0 !important;
                 padding-left: 0 !important;
                 padding-right: 0 !important;
-                border-radius: var(--mobile-radius) !important;
-                box-shadow:
-                    0 0 0 8px #1A1C22,
-                    0 0 0 10px #3A3C44,
-                    0 26px 72px rgba(0,0,0,0.36) !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                overflow: hidden !important;
             }
             [data-testid="stMainBlockContainer"]:not(.block-container),
             .stMainBlockContainer:not(.block-container) {
-                padding: var(--mobile-stage-top) 0 var(--mobile-stage-bottom) !important;
+                min-height: 100dvh !important;
+                height: 100dvh !important;
+                padding: 0 !important;
+                overflow: hidden !important;
             }
             [data-testid="stMainBlockContainer"]:not(.block-container) .block-container,
             .stMainBlockContainer:not(.block-container) .block-container {
-                height: var(--mobile-shell-h) !important;
-                max-height: var(--mobile-shell-h) !important;
-                margin: 0 auto !important;
+                height: 100dvh !important;
+                max-height: 100dvh !important;
+                margin: 0 !important;
+            }
+            .st-key-mobile_status_shell,
+            .mobile-status-wrap {
+                top: env(safe-area-inset-top, 0px) !important;
+                left: var(--mobile-edge-inset) !important;
+                right: var(--mobile-edge-inset) !important;
+            }
+            .st-key-mobile_page_scroll {
+                top: calc(env(safe-area-inset-top, 0px) + var(--mobile-status-h) + 8px) !important;
+                bottom: calc(var(--mobile-tab-shell-h) + 10px + var(--mobile-safe-bottom)) !important;
+                left: var(--mobile-edge-inset) !important;
+                right: var(--mobile-edge-inset) !important;
+                padding-bottom: 18px !important;
+                overflow-x: hidden !important;
+            }
+            .st-key-mobile_tabbar_shell,
+            .mobile-tabbar {
+                left: 12px !important;
+                right: 12px !important;
+                bottom: calc(6px + var(--mobile-safe-bottom)) !important;
+                border-radius: 24px !important;
+                box-shadow: 0 8px 24px rgba(16,24,18,0.16) !important;
             }
         }
         </style>
@@ -1033,24 +1128,75 @@ def _inject_mobile_final_overrides():
             margin: 0 !important;
         }
         @media (max-width: 520px) {
+            :root {
+                --mobile-shell-max: 100vw;
+                --mobile-shell-h: 100dvh;
+                --mobile-radius: 0px;
+                --mobile-stage-top: 0px;
+                --mobile-stage-bottom: 0px;
+                --mobile-stage-reserve: 0px;
+                --mobile-edge-inset: 14px;
+                --mobile-tab-shell-h: 72px;
+            }
+            html, body, .stApp,
+            [data-testid="stAppViewContainer"],
+            .stAppViewContainer,
+            [data-testid="stMain"],
+            .stMain {
+                width: 100vw !important;
+                max-width: 100vw !important;
+                min-height: 100dvh !important;
+                overflow-x: hidden !important;
+                background: var(--mobile-shell-bg) !important;
+            }
             .block-container {
                 box-sizing: border-box !important;
-                width: min(calc(100% - 32px), var(--mobile-shell-max)) !important;
-                max-width: var(--mobile-shell-max) !important;
-                height: var(--mobile-shell-h) !important;
+                width: 100vw !important;
+                max-width: 100vw !important;
+                height: 100dvh !important;
                 min-height: 0 !important;
-                max-height: var(--mobile-shell-h) !important;
-                margin: var(--mobile-stage-top) auto var(--mobile-stage-bottom) !important;
+                max-height: 100dvh !important;
+                margin: 0 !important;
                 padding-left: 0 !important;
                 padding-right: 0 !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                overflow: hidden !important;
             }
             [data-testid="stMainBlockContainer"]:not(.block-container),
             .stMainBlockContainer:not(.block-container) {
-                padding: var(--mobile-stage-top) 0 var(--mobile-stage-bottom) !important;
+                min-height: 100dvh !important;
+                height: 100dvh !important;
+                padding: 0 !important;
+                overflow: hidden !important;
             }
             [data-testid="stMainBlockContainer"]:not(.block-container) .block-container,
             .stMainBlockContainer:not(.block-container) .block-container {
-                margin: 0 auto !important;
+                height: 100dvh !important;
+                max-height: 100dvh !important;
+                margin: 0 !important;
+            }
+            .st-key-mobile_status_shell,
+            .mobile-status-wrap {
+                top: env(safe-area-inset-top, 0px) !important;
+                left: var(--mobile-edge-inset) !important;
+                right: var(--mobile-edge-inset) !important;
+            }
+            .st-key-mobile_page_scroll {
+                top: calc(env(safe-area-inset-top, 0px) + var(--mobile-status-h) + 8px) !important;
+                bottom: calc(var(--mobile-tab-shell-h) + 10px + var(--mobile-safe-bottom)) !important;
+                left: var(--mobile-edge-inset) !important;
+                right: var(--mobile-edge-inset) !important;
+                padding-bottom: 18px !important;
+                overflow-x: hidden !important;
+            }
+            .st-key-mobile_tabbar_shell,
+            .mobile-tabbar {
+                left: 12px !important;
+                right: 12px !important;
+                bottom: calc(6px + var(--mobile-safe-bottom)) !important;
+                border-radius: 24px !important;
+                box-shadow: 0 8px 24px rgba(16,24,18,0.16) !important;
             }
         }
         </style>
