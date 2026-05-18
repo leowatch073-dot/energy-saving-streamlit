@@ -54,9 +54,14 @@ def _esc(s) -> str:
 
 
 def _today_str() -> str:
-    return str(st.session_state.get(
-        "business_date_str", _dt.now().strftime("%Y-%m-%d")
-    ))
+    value = st.session_state.get(
+        "business_date_str",
+        st.session_state.get("selected_business_date", _dt.now().strftime("%Y-%m-%d")),
+    )
+    try:
+        return pd.to_datetime(value).strftime("%Y-%m-%d")
+    except Exception:
+        return str(value)[:10]
 
 
 def _dorm_id() -> str:
@@ -426,7 +431,16 @@ def _render_kb(all_tip_df: pd.DataFrame, today_df: pd.DataFrame):
     if all_tip_df.empty or "ts" not in all_tip_df.columns:
         kb_df = all_tip_df.iloc[0:0].copy()
     else:
-        kb_df = all_tip_df[all_tip_df["ts"].astype(str).str.startswith(today)].copy()
+        ts_date = pd.to_datetime(all_tip_df["ts"], errors="coerce").dt.strftime("%Y-%m-%d")
+        ts_text = all_tip_df["ts"].astype(str).str.replace("/", "-", regex=False).str[:10]
+        date_mask = ts_date.eq(today) | ts_text.eq(today)
+
+        dorm = _dorm_id()
+        if dorm and "dorm_id" in all_tip_df.columns:
+            dorm_mask = all_tip_df["dorm_id"].astype(str).eq(dorm)
+            kb_df = all_tip_df[date_mask & dorm_mask].copy()
+        else:
+            kb_df = all_tip_df[date_mask].copy()
 
     total_n = len(kb_df)
 
@@ -461,6 +475,15 @@ def _render_kb(all_tip_df: pd.DataFrame, today_df: pd.DataFrame):
         })
 
     cards_json = json.dumps(cards_data, ensure_ascii=False)
+    kb_context_json = json.dumps(
+        {
+            "date": today,
+            "dorm": _dorm_id(),
+            "total": total_n,
+            "message_keys": [str(row.get("message_key", "")) for _, row in kb_df.iterrows()],
+        },
+        ensure_ascii=False,
+    )
 
     # iframe 高度给足卡片正文空间，避免移动端知识卡片被裁切。
     card_h  = 208
@@ -498,6 +521,7 @@ html,body{{background:transparent;font-family:'Noto Sans SC',-apple-system,sans-
 </style>
 </head>
 <body>
+<!-- kb-context: {kb_context_json} -->
 <div class="root">
   <div class="track-wrap"><div class="track" id="track"></div></div>
   <div class="nav">
