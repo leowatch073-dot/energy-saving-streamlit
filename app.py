@@ -58,26 +58,6 @@ def _set_today_callback():
     st.session_state["business_date_picker"] = datetime.now().date()
 
 
-def _sync_demo_day_to_business_date(total_days: int | None = None):
-    total = int(total_days or st.session_state.get("sim_days", 20) or 20)
-    total = max(1, total)
-    day_idx = int(st.session_state.get("demo_day_index", total))
-    day_idx = max(1, min(total, day_idx))
-    st.session_state["demo_day_index"] = day_idx
-    start_date = datetime.now().date() - timedelta(days=total - 1)
-    st.session_state["business_date_picker"] = start_date + timedelta(days=day_idx - 1)
-
-
-def _shift_demo_day_callback(days: int, total_days: int):
-    total = max(1, int(total_days))
-    current = int(st.session_state.get("demo_day_index", total))
-    st.session_state["demo_day_index"] = max(1, min(total, current + int(days)))
-
-
-def _set_demo_today_callback(total_days: int):
-    st.session_state["demo_day_index"] = max(1, int(total_days))
-
-
 # ===================== 频控 =====================
 def freq_guard_allow_daily(dorm_id: str, daily_cap: int, inter_logs: pd.DataFrame) -> tuple[bool, int]:
     """判断某宿舍当天是否还能继续发送干预。"""
@@ -614,7 +594,6 @@ inject_sidebar_style()
 # ===================== Sidebar 控件 =====================
 df_all = None
 load_stats = None
-_sync_demo_day_to_business_date()
 
 with st.sidebar:
     render_sidebar_status_card()
@@ -623,103 +602,7 @@ with st.sidebar:
     page = st.radio("页面", ["用户端", "Admin"], index=0, label_visibility="collapsed")
 
     _sidebar_soft_divider()
-    with st.expander("Demo｜演示控制", expanded=True):
-        _sidebar_section_title("演示控制", "手机录屏常用：切换日期与 SIM 宿舍", kicker="Demo")
-
-        sim_user_pool_df = st.session_state.get("sim_user_pool_df")
-        if (
-            sim_user_pool_df is not None
-            and not sim_user_pool_df.empty
-            and "dorm_id" in sim_user_pool_df.columns
-        ):
-            demo_dorm_ids = sim_user_pool_df["dorm_id"].dropna().astype(str).unique().tolist()
-        else:
-            demo_dorm_ids = [
-                str(rec.get("dorm_id", "")).strip()
-                for rec in st.session_state.get("scores", [])
-                if isinstance(rec, dict) and str(rec.get("dorm_id", "")).startswith("SIM_")
-            ]
-            demo_dorm_ids = sorted(set([d for d in demo_dorm_ids if d]))
-
-        if demo_dorm_ids:
-            current_demo_dorm = str(st.session_state.get("current_dorm_for_messages", "")).strip()
-            if current_demo_dorm not in demo_dorm_ids:
-                current_demo_dorm = str(st.session_state.get("home_selected_dorm_real", "")).strip()
-            if current_demo_dorm not in demo_dorm_ids:
-                current_demo_dorm = demo_dorm_ids[0]
-
-            selected_demo_dorm = st.selectbox(
-                "SIM 宿舍 / 用户",
-                demo_dorm_ids,
-                index=demo_dorm_ids.index(current_demo_dorm),
-                key="sidebar_demo_dorm",
-            )
-            st.session_state["current_dorm_for_messages"] = selected_demo_dorm
-            st.session_state["home_selected_dorm_real"] = selected_demo_dorm
-            st.session_state["home_selected_dorm_sim"] = selected_demo_dorm
-        else:
-            st.caption("暂无 SIM 用户池，已保留默认演示数据初始化。")
-
-        demo_days_total = max(1, int(st.session_state.get("sim_days", 20) or 20))
-        if int(st.session_state.get("demo_day_index", demo_days_total)) > demo_days_total:
-            st.session_state["demo_day_index"] = demo_days_total
-        if int(st.session_state.get("demo_day_index", demo_days_total)) < 1:
-            st.session_state["demo_day_index"] = 1
-        demo_day = st.slider(
-            "干预第 N 天",
-            min_value=1,
-            max_value=demo_days_total,
-            step=1,
-            key="demo_day_index",
-        )
-        _sync_demo_day_to_business_date(total_days=demo_days_total)
-        business_date = _normalize_business_date(st.session_state.get("business_date_picker"))
-        st.session_state["business_date"] = business_date
-        st.session_state["business_date_str"] = pd.to_datetime(business_date).strftime("%Y-%m-%d")
-        st.caption(f"演示日期：{st.session_state['business_date_str']} · 第 {demo_day}/{demo_days_total} 天")
-
-        b1, b2, b3 = st.columns(3)
-        with b1:
-            st.button(
-                "前一天",
-                use_container_width=True,
-                on_click=_shift_demo_day_callback,
-                args=(-1, demo_days_total),
-            )
-        with b2:
-            st.button(
-                "今天",
-                use_container_width=True,
-                on_click=_set_demo_today_callback,
-                args=(demo_days_total,),
-            )
-        with b3:
-            st.button(
-                "后一天",
-                use_container_width=True,
-                on_click=_shift_demo_day_callback,
-                args=(1, demo_days_total),
-            )
-
-        if st.button("重置演示状态", use_container_width=True, key="reset_demo_state_sidebar"):
-            st.session_state["messages"] = []
-            st.session_state["interaction_logs"] = []
-            st.session_state["intervention_logs"] = []
-            st.session_state["tasks_checkin_log"] = []
-            st.session_state["user_progress_by_dorm"] = {}
-            st.session_state["today_checked_in"] = False
-            st.session_state["streak_days"] = 0
-            st.session_state["weekly_checkins"] = []
-            st.session_state["earned_xp"] = 0
-            st.session_state["total_xp"] = 0
-            st.session_state["unlocked_badges"] = []
-            st.session_state["tasks_view"] = "main"
-            st.session_state["profile_subpage"] = "main"
-            st.success("已重置演示消息、日志和打卡进度。")
-            st.rerun()
-
-    _sidebar_soft_divider()
-    with st.expander("Advanced｜数据与调参", expanded=False):
+    with st.expander("Data｜数据来源", expanded=True):
         _sidebar_section_title("数据来源", "上传真实 CSV，或先用模拟数据驱动界面", kicker="Data")
         data_mode = st.radio(
             "选择数据来源",
@@ -739,7 +622,7 @@ with st.sidebar:
                     strict_hour=strict_hour,
                 )
         else:
-            sim_days = st.slider("模拟天数（>=14）", 14, 60, 20, 1, key="sim_days")
+            sim_days = st.slider("模拟天数（>=14）", 14, 60, 20, 1)
             seed = st.number_input("随机种子", value=42, step=1)
 
             sim_user_pool_df = st.session_state.get("sim_user_pool_df")
@@ -765,7 +648,7 @@ with st.sidebar:
                 strict_hour=strict_hour,
             )
 
-        _sidebar_soft_divider()
+    with st.expander("Tuning｜实验参数", expanded=True):
         _sidebar_section_title("实验参数", "调节 bandit 与 baseline 的基础参数", kicker="Tuning")
         linucb_alpha = st.slider("LinUCB alpha", 0.1, 3.0, 1.0, 0.1)
         ridge_alpha = st.number_input("Ridge alpha", min_value=0.01, value=1.0, step=0.1)
@@ -776,6 +659,37 @@ with st.sidebar:
             step=1,
             key="daily_cap",
         )
+
+    with st.expander("Timeline｜实验日期", expanded=True):
+        _sidebar_section_title("实验日期", "支持按天回看历史消息与干预记录", kicker="Timeline")
+        step_days = st.selectbox("快速跳转步长", options=[1, 3, 7], index=0, key="business_date_step")
+        st.date_input(
+            "选择日期",
+            value=_normalize_business_date(st.session_state.get("business_date_picker")),
+            key="business_date_picker",
+        )
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            st.button(
+                f"前{step_days}天",
+                use_container_width=True,
+                on_click=_shift_business_date_callback,
+                args=(-int(step_days),),
+            )
+        with b2:
+            st.button("今天", use_container_width=True, on_click=_set_today_callback)
+        with b3:
+            st.button(
+                f"后{step_days}天",
+                use_container_width=True,
+                on_click=_shift_business_date_callback,
+                args=(int(step_days),),
+            )
+
+        business_date = _normalize_business_date(st.session_state.get("business_date_picker"))
+        st.session_state["business_date"] = business_date
+        st.session_state["business_date_str"] = pd.to_datetime(business_date).strftime("%Y-%m-%d")
+        st.caption(f"当前演示日期：{st.session_state['business_date_str']}")
 
     with st.expander("Manage｜历史管理", expanded=False):
         _sidebar_section_title("历史管理", "清空消息与日志前请先确认是否需要保留实验痕迹", kicker="Manage")
@@ -829,6 +743,7 @@ def _inject_mobile_shell_style():
             --mobile-stage-reserve: 84px;
             --mobile-shell-h: min(844px, calc(100dvh - var(--mobile-stage-reserve)));
             --mobile-edge-inset: 28px;
+            --mobile-status-h: 30px;
             --mobile-tab-h: 44px;
             --mobile-tab-shell-h: 64px;
             --mobile-safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -931,6 +846,33 @@ def _inject_mobile_shell_style():
             white-space: normal !important;
         }
 
+        .st-key-mobile_status_shell,
+        .mobile-status-wrap {
+            position: absolute !important;
+            top: 0 !important;
+            left: var(--mobile-edge-inset) !important;
+            right: var(--mobile-edge-inset) !important;
+            height: var(--mobile-status-h) !important;
+            z-index: 20 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 0 !important;
+            overflow: hidden !important;
+        }
+        .st-key-mobile_status_shell [data-testid="stElementContainer"],
+        .st-key-mobile_status_shell [data-testid="stIFrame"],
+        .mobile-status-wrap [data-testid="stElementContainer"],
+        .mobile-status-wrap [data-testid="stIFrame"] {
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 0 !important;
+        }
+        .st-key-mobile_status_shell iframe,
+        .mobile-status-wrap iframe {
+            display: block !important;
+            border-radius: 0 !important;
+        }
+
         .st-key-mobile_tabbar_shell,
         .mobile-tabbar {
             position: absolute !important;
@@ -1001,7 +943,7 @@ def _inject_mobile_shell_style():
 
         .st-key-mobile_page_scroll {
             position: absolute !important;
-            top: 14px !important;
+            top: calc(var(--mobile-status-h) + 6px) !important;
             bottom: calc(var(--mobile-tab-shell-h) + 18px + var(--mobile-safe-bottom)) !important;
             left: var(--mobile-edge-inset) !important;
             right: var(--mobile-edge-inset) !important;
@@ -1045,23 +987,6 @@ def _inject_mobile_shell_style():
                 visibility: hidden !important;
                 pointer-events: none !important;
             }
-            header[data-testid="stHeader"] {
-                visibility: visible !important;
-                height: 42px !important;
-                background: transparent !important;
-                pointer-events: auto !important;
-                z-index: 2000 !important;
-            }
-            [data-testid="collapsedControl"] {
-                display: flex !important;
-                visibility: visible !important;
-                opacity: 1 !important;
-                pointer-events: auto !important;
-                z-index: 2001 !important;
-            }
-            section[data-testid="stSidebar"] {
-                z-index: 2002 !important;
-            }
             html, body, .stApp,
             [data-testid="stAppViewContainer"],
             .stAppViewContainer,
@@ -1100,8 +1025,14 @@ def _inject_mobile_shell_style():
                 max-height: 100dvh !important;
                 margin: 0 !important;
             }
+            .st-key-mobile_status_shell,
+            .mobile-status-wrap {
+                top: env(safe-area-inset-top, 0px) !important;
+                left: var(--mobile-edge-inset) !important;
+                right: var(--mobile-edge-inset) !important;
+            }
             .st-key-mobile_page_scroll {
-                top: calc(env(safe-area-inset-top, 0px) + 48px) !important;
+                top: calc(env(safe-area-inset-top, 0px) + var(--mobile-status-h) + 8px) !important;
                 bottom: calc(var(--mobile-tab-shell-h) + 16px + var(--mobile-safe-bottom)) !important;
                 left: var(--mobile-edge-inset) !important;
                 right: var(--mobile-edge-inset) !important;
@@ -1251,23 +1182,6 @@ def _inject_mobile_final_overrides():
                 visibility: hidden !important;
                 pointer-events: none !important;
             }
-            header[data-testid="stHeader"] {
-                visibility: visible !important;
-                height: 42px !important;
-                background: transparent !important;
-                pointer-events: auto !important;
-                z-index: 2000 !important;
-            }
-            [data-testid="collapsedControl"] {
-                display: flex !important;
-                visibility: visible !important;
-                opacity: 1 !important;
-                pointer-events: auto !important;
-                z-index: 2001 !important;
-            }
-            section[data-testid="stSidebar"] {
-                z-index: 2002 !important;
-            }
             html, body, .stApp,
             [data-testid="stAppViewContainer"],
             .stAppViewContainer,
@@ -1306,8 +1220,14 @@ def _inject_mobile_final_overrides():
                 max-height: 100dvh !important;
                 margin: 0 !important;
             }
+            .st-key-mobile_status_shell,
+            .mobile-status-wrap {
+                top: env(safe-area-inset-top, 0px) !important;
+                left: var(--mobile-edge-inset) !important;
+                right: var(--mobile-edge-inset) !important;
+            }
             .st-key-mobile_page_scroll {
-                top: calc(env(safe-area-inset-top, 0px) + 48px) !important;
+                top: calc(env(safe-area-inset-top, 0px) + var(--mobile-status-h) + 8px) !important;
                 bottom: calc(var(--mobile-tab-shell-h) + 16px + var(--mobile-safe-bottom)) !important;
                 left: var(--mobile-edge-inset) !important;
                 right: var(--mobile-edge-inset) !important;
@@ -1459,9 +1379,41 @@ else:
         st.rerun()
 
     else:
+        import streamlit.components.v1 as _comp
         mobile_tab   = st.session_state.get("mobile_tab", "Home")
+        from datetime import datetime as _dt
+        now_time     = _dt.now().strftime("%H:%M")
         unread_count = len([m for m in st.session_state.get("messages", [])
                             if isinstance(m, dict) and not m.get("read", False)])
+
+        # 顶部状态栏。它现在只是手机容器里的普通内容，不再依赖固定壳高。
+        with st.container(key="mobile_status_shell"):
+            _comp.html(f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+*{{box-sizing:border-box;margin:0;padding:0;}}
+html,body{{width:100%;height:30px;overflow:hidden;background:#F1F5F2;
+  font-family:'Noto Sans SC',-apple-system,sans-serif;}}
+.bar{{height:30px;display:flex;justify-content:space-between;align-items:center;
+  padding:1px 4px 0;font-size:14px;font-weight:800;color:#1A2820;}}
+</style></head><body>
+<div class="bar">
+  <span>{now_time}</span>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <svg width="17" height="12" viewBox="0 0 17 12" fill="#1A2820">
+      <rect x="0" y="6" width="3" height="6" rx="0.8"/>
+      <rect x="4.5" y="4" width="3" height="8" rx="0.8"/>
+      <rect x="9" y="2" width="3" height="10" rx="0.8"/>
+      <rect x="13.5" y="0" width="3" height="12" rx="0.8" opacity="0.3"/>
+    </svg>
+    <svg width="25" height="12" viewBox="0 0 25 12" fill="#1A2820">
+      <rect x="0.5" y="0.5" width="21" height="11" rx="3"
+            stroke="#1A2820" stroke-width="1" fill="none"/>
+      <rect x="22" y="4" width="3" height="4" rx="1.5"/>
+      <rect x="2" y="2" width="15" height="8" rx="2"/>
+    </svg>
+  </div>
+</div>
+</body></html>""", height=30, scrolling=False)
 
         # 内容路由。页面内容在固定手机屏幕内部滚动，底部 Tab 留在屏幕内。
         with st.container(key="mobile_page_scroll"):
