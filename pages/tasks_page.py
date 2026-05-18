@@ -422,10 +422,11 @@ def _render_today_task(today_df: pd.DataFrame):
 # ══════════════════════════════════════════════════════════════
 
 def _render_kb(all_tip_df: pd.DataFrame, today_df: pd.DataFrame):
-    today_idx = set(today_df["message_index"].tolist()) if not today_df.empty else set()
-    kb_df = all_tip_df[~all_tip_df["message_index"].isin(today_idx)].copy()
-    if kb_df.empty:
-        kb_df = all_tip_df.copy()
+    today = _today_str()[:10]
+    if all_tip_df.empty or "ts" not in all_tip_df.columns:
+        kb_df = all_tip_df.iloc[0:0].copy()
+    else:
+        kb_df = all_tip_df[all_tip_df["ts"].astype(str).str.startswith(today)].copy()
 
     total_n = len(kb_df)
 
@@ -437,14 +438,14 @@ def _render_kb(all_tip_df: pd.DataFrame, today_df: pd.DataFrame):
 """, unsafe_allow_html=True)
 
     if kb_df.empty:
-        st.markdown("""
+        st.markdown(f"""
 <div style="padding:20px;text-align:center;color:#B0BAB5;font-size:12px;
-            font-family:'Noto Sans SC',sans-serif;">暂无知识内容</div>
+            font-family:'Noto Sans SC',sans-serif;">{_esc(today)} 暂无知识内容</div>
 """, unsafe_allow_html=True)
         return
 
     # 处理知识库曝光事件（postMessage 传来的 real_idx）
-    _process_kb_exposure()
+    _process_kb_exposure(kb_df)
 
     # 构建卡片数据，包含 real_idx 供 JS postMessage 回传
     cards_data = []
@@ -553,7 +554,7 @@ render();
     components.html(iframe_html, height=total_h, scrolling=False)
 
 
-def _process_kb_exposure():
+def _process_kb_exposure(kb_df: pd.DataFrame | None = None):
     """
     处理知识库卡片曝光：
     JS postMessage 无法直接触发 Python，改用 st.session_state["_tk_read_idx"]
@@ -565,11 +566,24 @@ def _process_kb_exposure():
     """
     from pages.messages_page import mark_message_read, append_interaction_log
     messages = st.session_state.get("messages", [])
-    mark_key = "_tk_kb_auto_read_done"
+    today = _today_str()[:10]
+    mark_key = f"_tk_kb_auto_read_done_{today}"
     if st.session_state.get(mark_key):
         return
-    # 第一次打开知识库时，将所有 tip 标记为已读（静默、无视觉提示）
+    if kb_df is None or kb_df.empty or "message_index" not in kb_df.columns:
+        return
+    visible_idx = set()
+    for value in kb_df["message_index"].tolist():
+        try:
+            visible_idx.add(int(value))
+        except Exception:
+            continue
+    if not visible_idx:
+        return
+    # 第一次打开当天知识库时，仅将当前展示的 tip 标记为已读（静默、无视觉提示）
     for i, msg in enumerate(messages):
+        if i not in visible_idx:
+            continue
         if isinstance(msg, dict):
             ch = str(msg.get("channel", "")).strip().lower()
             if ch == "tip" and not bool(msg.get("read", False)):
